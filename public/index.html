@@ -3,15 +3,15 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>智慧校园平台 · 登录</title>
+<title>AI 校园管理系统 · 登录</title>
 <link rel="stylesheet" href="/style.css" />
 </head>
 <body>
 <div class="login-wrap">
   <div class="login-box">
     <div class="login-left">
-      <div class="brand"><i></i><span id="brandName">智慧校园平台</span></div>
-      <div class="slogan">多租户 · 机构树 · 扫码登录<br /><span>同类架构实现</span></div>
+      <div class="brand"><i></i><span id="brandName">AI 校园管理系统</span></div>
+      <div class="slogan">多租户 · 机构树 · AI 助手<br /><span>华商智慧校园中枢</span></div>
       <div class="feat">
         <div>请求全程 AES-256-CBC 加密 + HMAC 签名 + 时间戳/nonce 防重放</div>
         <div>扫码登录 onceToken 服务端生成、一次性消费、轮询限流</div>
@@ -142,7 +142,7 @@ async function onTenantChange() {
   const r = await api('/base/api/tenant/query', {}, { method: 'GET', query: { uniqueName: un }, encrypt: false });
   if (r.code !== 0) return toast(r.msg, 'err');
   Store.tenant = r.data.id;
-  $('brandName').textContent = r.data.title || '智慧校园平台';
+  $('brandName').textContent = r.data.title || 'AI 校园管理系统';
   window.__tenant = r.data;
   const rg = $('btnReg');
   rg.disabled = !r.data.registerEnable;

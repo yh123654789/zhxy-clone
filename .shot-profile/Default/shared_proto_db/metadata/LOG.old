@@ -1,3 +1,2 @@
-2026/11/27-08:19:11.706 2290 Reusing MANIFEST D:\Projects\zhxy-clone\.shot-profile\Default\shared_proto_db\metadata/MANIFEST-000001
-2026/11/27-08:19:11.706 2290 Recovering log #3
-2026/11/27-08:19:11.707 2290 Reusing old log D:\Projects\zhxy-clone\.shot-profile\Default\shared_proto_db\metadata/000003.log 
+2026/11/27-08:28:29.957 2028 Creating DB D:\Projects\zhxy-clone\.shot-profile\Default\shared_proto_db\metadata since it was missing.
+2026/11/27-08:28:29.995 2028 Reusing MANIFEST D:\Projects\zhxy-clone\.shot-profile\Default\shared_proto_db\metadata/MANIFEST-000001

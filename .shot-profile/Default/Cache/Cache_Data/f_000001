@@ -3,13 +3,13 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>智慧校园平台 · 管理后台</title>
+<title>AI 校园管理系统 · 管理后台</title>
 <link rel="stylesheet" href="/style.css" />
 </head>
 <body>
 <div class="layout">
   <aside class="side">
-    <div class="brand"><i></i> 智慧校园</div>
+    <div class="brand"><i></i> AI 校园管理</div>
     <nav id="nav"></nav>
     <div class="who">
       <div id="whoName">—</div>
@@ -106,8 +106,8 @@ async function viewHome() {
     <div class="card" style="margin-top:16px">
       <div style="font-weight:700;margin-bottom:10px">当前权限</div>
       <div class="dim" style="font-size:13px;line-height:2">
-        页面权限码：<span class="mono">${JSON.stringify(ME.permissions.pages)}</span><br/>
-        按钮权限码：<span class="mono">${JSON.stringify(ME.permissions.btns)}</span><br/>
+        页面权限码：${ME.permissions.pages.map(p=>`<span class="tag ok" style="margin:2px 4px 2px 0">${p}</span>`).join('') || '<span class="dim">（无）</span>'}<br/>
+        按钮权限码：${ME.permissions.btns.map(p=>`<span class="tag" style="margin:2px 4px 2px 0">${p}</span>`).join('') || '<span class="dim">（无）</span>'}<br/>
         <span style="color:var(--warn)">提示：按钮权限只影响前端是否渲染，服务端每个写接口都会独立校验 —— 直接构造请求也会被拒。</span>
       </div>
     </div>`;
@@ -384,7 +384,7 @@ async function doLeave(leaveId, pass) {
 }
 
 /* ---------------- AI 助手 ---------------- */
-let aiMsgs = [{ role: 'assistant', content: '你好，我是智慧校园平台的智能助手。可以问我：怎么登录、扫码怎么用、为什么看不到某些菜单、成绩怎么录、请假怎么审批、一次性 Token 是什么。' }];
+let aiMsgs = [{ role: 'assistant', content: '你好，我是AI 校园管理系统的智能助手。可以问我：怎么登录、扫码怎么用、为什么看不到某些菜单、成绩怎么录、请假怎么审批、一次性 Token 是什么。' }];
 let aiBusy = false;
 function escapeHtml(s) { return String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
 
@@ -534,7 +534,7 @@ async function renderHomeCharts() {
           ${bars || '<text x="' + W / 2 + '" y="' + H / 2 + '" text-anchor="middle" fill="#7d97ad" font-size="12">无数据</text>'}
         </svg>
       </div>
-      <div class="card">
+      <div class="card" style="display:flex;flex-direction:column;justify-content:center;height:100%">
         <div style="font-weight:700;margin-bottom:4px">请假审批分布</div>
         <div class="dim" style="font-size:12px;margin-bottom:6px">共 ${total} 条申请</div>
         <div style="display:flex;align-items:center;gap:18px">

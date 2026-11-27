@@ -61,7 +61,7 @@ d.rounded_rectangle([card_x, card_y, card_x + card_w, card_y + 46], 20, fill=(26
 d.rectangle([card_x, card_y + 30, card_x + card_w, card_y + 46], fill=(26, 44, 68, 255))
 for i, col in enumerate([(226, 87, 76), (224, 163, 62), (53, 192, 122)]):
     d.ellipse([card_x + 16 + i * 18, card_y + 17, card_x + 27 + i * 18, card_y + 28], fill=col)
-d.text((card_x + 84, card_y + 14), "智圃 · 智慧校园管理后台", font=font(15, False), fill=(150, 176, 200))
+d.text((card_x + 84, card_y + 14), "智圃 · AI 校园管理系统", font=font(15, False), fill=(150, 176, 200))
 
 # 侧边栏
 side_w = 108
@@ -119,8 +119,8 @@ d.text((LX + 16, 82), "AI 应用开发类 · 参赛作品", font=font(14, False)
 
 # 主标题
 d.text((LX, 132), "智圃", font=font(76), fill=(240, 250, 252))
-d.text((LX, 222), "华商智慧校园", font=font(52), fill=(238, 248, 250))
-d.text((LX, 288), "AI 中枢", font=font(52), fill=(55, 179, 162))
+d.text((LX, 222), "AI 校园管理", font=font(52), fill=(238, 248, 250))
+d.text((LX, 288), "系统", font=font(52), fill=(55, 179, 162))
 
 # 副标题
 for i, line in enumerate(["以 AI 助手为统一入口，打通学生、教师、班级、",

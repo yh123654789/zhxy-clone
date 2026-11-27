@@ -3,13 +3,13 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>智慧校园平台 · 管理后台</title>
+<title>AI 校园管理系统 · 管理后台</title>
 <link rel="stylesheet" href="/style.css" />
 </head>
 <body>
 <div class="layout">
   <aside class="side">
-    <div class="brand"><i></i> 智慧校园</div>
+    <div class="brand"><i></i> AI 校园管理</div>
     <nav id="nav"></nav>
     <div class="who">
       <div id="whoName">—</div>
@@ -384,7 +384,7 @@ async function doLeave(leaveId, pass) {
 }
 
 /* ---------------- AI 助手 ---------------- */
-let aiMsgs = [{ role: 'assistant', content: '你好，我是智慧校园平台的智能助手。可以问我：怎么登录、扫码怎么用、为什么看不到某些菜单、成绩怎么录、请假怎么审批、一次性 Token 是什么。' }];
+let aiMsgs = [{ role: 'assistant', content: '你好，我是AI 校园管理系统的智能助手。可以问我：怎么登录、扫码怎么用、为什么看不到某些菜单、成绩怎么录、请假怎么审批、一次性 Token 是什么。' }];
 let aiBusy = false;
 function escapeHtml(s) { return String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
 
