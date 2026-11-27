@@ -11,23 +11,25 @@
 
 > **作品要求 2**：作品须基于百度搭子平台设计、开发、生成或展示，需提供平台内可验证的作品链接。
 
-**平台已确认**：秒哒（miaoda）+ 搭子（dumate）。官方认可的作品链接格式：
+**平台已确认**：主用**百度搭子 DuMate**（桌面客户端），备选秒哒。官方认可的作品链接格式：
 
-| 类型 | 格式 | 说明 |
+| 类型 | 格式 | 推荐度 |
 |---|---|---|
-| 百度搭子官网 | `https://www.dumate.cn/artifacts/xxxx` 或 `https://dumate.baidu.com/artifacts/xxxx` | 搭子生成的产物页 |
-| 搭子分享链接 | `https://www.dumate.cn/sf/xxxx` | PPT 等分享物 |
-| **应用直链** | **`https://app-xxxx.miaoda.online`** | 秒哒生成并托管的应用 |
-| 秒哒项目页 | `https://www.miaoda.cn/projects/app-xxxx` | 项目详情页 |
+| **搭子产物链接** | `https://www.dumate.cn/artifacts/xxxx` | ★★★ 主用 |
+| 搭子产物（备用域） | `https://dumate.baidu.com/artifacts/xxxx` | ★★★ |
+| 搭子分享链接（PPT等） | `https://www.dumate.cn/sf/xxxx` | ★★ |
+| 秒哒应用直链 | `https://app-xxxx.miaoda.online` | ★★ 备选 |
+| 秒哒项目页 | `https://www.miaoda.cn/projects/app-xxxx` | ★ |
 
-**结论：必须在秒哒/搭子上真正生成应用，拿到 `app-xxxx.miaoda.online` 直链。** 我们自研的 Node 系统**不能直接作为作品链接**（不是平台内地址），只能作为「完整技术版」在描述里说明、作为加分证据。
+**结论：必须在搭子/秒哒上真正生成应用，拿到平台内链接。** 自研 Node 系统**不能直接作为作品链接**，只作为「完整技术版」在描述里说明。
 
-### 执行方案
+### 执行方案（DuMate 优先）
 
-1. 按 `COMPETITION-MIAODA-PROMPTS.md` 里的 5 段提示词，在秒哒分轮生成应用（骨架 → 学生/教师/班级 → 成绩+图表 → 通知+请假 → AI 助手）；
-2. 拿到 `app-xxxx.miaoda.online` 直链，作为**提交链接**；
-3. 自研 `zhxy-clone` 部署在云上，作为「深度技术版」，描述里补一句可提供访问；
-4. 作品的「创新性」靠自研版讲（AES 通信、扫码登录、RBAC 服务端校验、AI 三层回退），「可用性」靠秒哒版演示（点开即用、AI 流式回答）。
+1. 用 `COMPETITION-DUMATE-PROMPTS.md` 里的【主任务单】在 DuMate 客户端一次生成（单文件前端应用，localStorage 存数据）；
+2. 用【迭代指令】修正配色/图表/打字机效果；
+3. 发布后拿 `dumate.cn/artifacts/xxxx` 链接，**用无痕窗口验证未登录能打开**；
+4. 自研 `zhxy-clone` 部署上云作为「深度技术版」，描述里补一句可提供访问；
+5. 创新性靠自研版讲（AES 通信、扫码登录、RBAC 服务端校验、AI 三层回退），可用性靠搭子版演示（点开即用、AI 对话）。
 
 ## 二、赛道选择：报哪个最占优
 
