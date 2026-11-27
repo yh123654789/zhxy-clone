@@ -910,6 +910,47 @@ if (SHOW_DEV_CODE) {
   }, { encrypt: false });
 }
 
+/* ---------- 公开 AI 接口（免登录，供搭子/秒哒前端调用） ---------- */
+// 用于第三方页面（如 DuMate 生成的作品页）直接接真模型，无需携带业务会话
+const PUB_HITS = new Map();   // ip -> {count, resetAt}
+R('POST', '/base/api/ai/public-chat', async (ctx) => {
+  // 简单限流：每 IP 每分钟 20 次
+  const k = ctx.ip || 'unknown';
+  const tk = now();
+  let h = PUB_HITS.get(k);
+  if (!h || tk > h.resetAt) { h = { count: 0, resetAt: tk + 60000 }; PUB_HITS.set(k, h); }
+  h.count++;
+  if (h.count > 20) return fail(ctx.res, 429, '请求过于频繁，请稍后再试');
+
+  const msgs = Array.isArray(ctx.body.messages) ? ctx.body.messages.slice(-8) : [];
+  const q = msgs.filter(m => m.role === 'user').pop();
+  if (!q || !String(q.content || '').trim()) return fail(ctx.res, 400, '请输入问题');
+  if (String(q.content).length > 1500) return fail(ctx.res, 400, '问题过长');
+
+  const ep = await aiEndpoint();
+  if (!ep) return ok(ctx.res, { answer: aiOffline(q.content), mode: 'offline' });
+
+  try {
+    const r = await fetch(ep.baseUrl.replace(/\/+$/, '') + '/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + (ep.apiKey || 'none') },
+      body: JSON.stringify({
+        model: ep.model, stream: false, temperature: 0.3, max_tokens: 600,
+        messages: [{ role: 'system', content: AI_SYSTEM },
+          ...msgs.map(m => ({ role: m.role, content: String(m.content) }))],
+      }),
+      signal: AbortSignal.timeout(60000),
+    });
+    const j = await r.json();
+    const answer = j?.choices?.[0]?.message?.content || aiOffline(q.content);
+    log({ tenant_id: '', user_id: '', user_name: 'public-api', ip: ctx.ip,
+      method: 'POST', path: ctx.path, status: 0, detail: '公开AI问答: ' + String(q.content).slice(0, 40) });
+    ok(ctx.res, { answer, mode: ep.kind, model: ep.model });
+  } catch (e) {
+    ok(ctx.res, { answer: '模型服务暂时不可用，请稍后再试。', mode: 'error', error: String(e.message || e) });
+  }
+}, { encrypt: false });
+
 /* ---------- 审计日志 ---------- */
 R('GET', '/base/api/audit/page', async (ctx) => {
   const { pageIndex = 1, pageSize = 20 } = ctx.query;
@@ -955,7 +996,13 @@ const server = http.createServer(async (req, res) => {
   const origin = req.headers.origin;
   const allow = localOrigins(req);
   const cors = {};
-  if (origin && allow.has(origin)) {
+  const isPublicAi = pathname === '/base/api/ai/public-chat';
+  if (isPublicAi && origin) {
+    // 公开 AI 接口：允许任意来源调用（不含凭据）
+    cors['Access-Control-Allow-Origin'] = '*';
+    cors['Access-Control-Allow-Methods'] = 'POST,OPTIONS';
+    cors['Access-Control-Allow-Headers'] = 'content-type';
+  } else if (origin && allow.has(origin)) {
     cors['Access-Control-Allow-Origin'] = origin;
     cors['Access-Control-Allow-Credentials'] = 'true';
     cors['Access-Control-Allow-Headers'] = 'authorization,content-type,yscry,yscrys,x-ts,x-nonce';
