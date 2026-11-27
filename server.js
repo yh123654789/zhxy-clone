@@ -120,11 +120,17 @@ function seed() {
   const roles = [
     ['super', '超级管理员', JSON.stringify(['*']), JSON.stringify(['*'])],
     ['school_admin', '学校管理员',
-      JSON.stringify(['base_student', 'base_teacher', 'base_class', 'base_org', 'sys_apply', 'sys_audit']),
+      JSON.stringify(['base_student', 'base_teacher', 'base_class', 'base_org', 'sys_apply', 'sys_audit',
+        'base_score', 'base_notice', 'base_leave']),
       JSON.stringify(['base_student_insert', 'base_student_update', 'base_student_delete',
-        'base_teacher_insert', 'base_teacher_update', 'base_apply_pass', 'base_apply_refuse'])],
-    ['teacher', '教师', JSON.stringify(['base_student', 'base_class']), JSON.stringify([])],
-    ['student', '学生', JSON.stringify([]), JSON.stringify([])],
+        'base_teacher_insert', 'base_teacher_update', 'base_apply_pass', 'base_apply_refuse',
+        'base_score_insert', 'base_notice_publish', 'base_leave_approve'])],
+    ['teacher_head', '班主任',
+      JSON.stringify(['base_student', 'base_class', 'base_score', 'base_notice', 'base_leave']),
+      JSON.stringify(['base_score_insert', 'base_leave_approve'])],
+    ['teacher', '教师',
+      JSON.stringify(['base_student', 'base_class', 'base_score', 'base_notice']), JSON.stringify([])],
+    ['student', '学生', JSON.stringify(['base_notice']), JSON.stringify([])],
   ];
   roles.forEach(r => run('INSERT INTO roles VALUES(?,?,?,?)', ...r));
 
@@ -135,6 +141,8 @@ function seed() {
   mk('U002', 'T1001', 'O104', 'teacher1', 'Teach@2026', '13800000002', '李老师', 'teacher');
   mk('U003', 'T1001', 'O100', 'root', 'Root@2026', '13800000003', '平台超管', 'super');
   mk('U004', 'T1002', 'O200', 'admin', 'Admin@2026', '13800000004', '王局长', 'school_admin');
+  mk('U005', 'T1001', 'O104', 'head1', 'Head@2026', '13800000005', '陈班主任', 'teacher_head');
+  mk('U006', 'T1001', 'O105', 'head2', 'Head@2026', '13800000006', '周班主任', 'teacher_head');
   console.log('[seed] 租户/机构/角色/账号 初始化完成');
 }
 seed();
@@ -530,24 +538,82 @@ const pageArgs = (body) => ({
   pageIndex: Math.max(1, Number(body.pageIndex || 1)),
   pageSize: Math.min(100, Math.max(1, Number(body.pageSize || 10))),
 });
-const BIZ = { student: [], teacher: [], klass: [] };
+const BIZ = { student: [], teacher: [], klass: [], score: [], notice: [], leave: [] };
 (function seedBiz() {
-  const names = ['王小明', '李思远', '张一诺', '陈佳怡', '刘子轩', '赵雨桐', '周景行', '吴梓涵', '徐若晨', '孙博文',
-    '马晨曦', '朱可欣', '胡亦然', '郭沐阳', '何书瑶', '高子墨', '林知夏', '罗嘉言', '郑安稳', '梁予安'];
-  const orgs = ['O104', 'O105', 'O106'];
-  names.forEach((n, i) => BIZ.student.push({
-    id: 'S' + String(1000 + i), tenantId: 'T1001', orgId: orgs[i % 3], name: n,
-    studentNo: '2026' + String(100 + i), gender: i % 2 ? '女' : '男',
-    phone: '139' + String(10000000 + i), status: 0,
-  }));
-  ['语文', '数学', '英语', '物理', '化学'].forEach((s, i) => BIZ.teacher.push({
-    id: 'E' + String(2000 + i), tenantId: 'T1001', orgId: 'O100', name: '教师' + (i + 1),
-    subject: s, phone: '137' + String(20000000 + i), status: 0,
-  }));
-  ['五年级1班', '五年级2班', '六年级1班', '初一1班'].forEach((c, i) => BIZ.klass.push({
-    id: 'C' + String(3000 + i), tenantId: 'T1001', orgId: ['O104', 'O104', 'O105', 'O106'][i],
-    name: c, headTeacher: '教师' + (i + 1), count: 40 + i, status: 0,
-  }));
+  // 确定性伪随机，保证每次启动生成同一批数据
+  let s0 = 20261122;
+  const rnd = () => (s0 = (s0 * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff;
+  const pick = (a) => a[Math.floor(rnd() * a.length)];
+  const SURNAME = '王李张刘陈杨黄赵周吴徐孙马朱胡郭何高林罗郑梁谢宋唐许韩冯邓曹彭曾萧田董潘袁蔡蒋余于杜叶程魏苏吕丁任沈'.split('');
+  const GIVEN = ['子轩', '思远', '一诺', '佳怡', '雨桐', '浩然', '梓涵', '若晨', '博文', '晨曦', '可欣', '沐阳',
+    '书瑶', '知夏', '嘉言', '安稳', '予安', '明轩', '语汐', '泽宇', '诗涵', '星野', '念之', '清和',
+    '亦然', '景行', '昱辰', '昭阳', '锦程', '可馨'];
+  const mkName = () => pick(SURNAME) + pick(GIVEN);
+
+  // 12 个教学班（3 个年级 × 4 班）
+  [['O104', '五年级'], ['O105', '六年级'], ['O106', '初一']].forEach(([orgId, g], gi) => {
+    for (let c = 1; c <= 4; c++) {
+      BIZ.klass.push({ id: 'C' + String(3000 + gi * 4 + c), tenantId: 'T1001', orgId,
+        name: `${g}${c}班`, headTeacher: pick(['陈老师', '周老师', '李老师', '吴老师']),
+        count: 20, status: 0 });
+    }
+  });
+
+  // 240 名学生（每班 20 人）
+  let sn = 100;
+  BIZ.klass.forEach(k => {
+    for (let i = 0; i < 20; i++) {
+      sn += 1;
+      BIZ.student.push({ id: 'S' + String(sn), tenantId: 'T1001', orgId: k.orgId, className: k.name,
+        name: mkName(), studentNo: '2026' + String(sn), gender: rnd() > 0.5 ? '男' : '女',
+        phone: '139' + String(10000000 + sn), status: 0 });
+    }
+  });
+
+  // 36 名教师
+  const SUBJECTS = ['语文', '数学', '英语', '物理', '化学', '生物', '政治', '历史', '地理', '体育', '音乐', '美术'];
+  for (let i = 0; i < 36; i++) {
+    BIZ.teacher.push({ id: 'E' + String(2000 + i), tenantId: 'T1001', orgId: 'O100',
+      name: pick(['张', '李', '王', '赵', '刘']) + '老师' + (i + 1),
+      subject: SUBJECTS[i % SUBJECTS.length], title: pick(['一级教师', '二级教师', '高级教师']),
+      phone: '137' + String(20000000 + i), status: 0 });
+  }
+
+  // 成绩：语文/数学/英语 × 240 人
+  ['语文', '数学', '英语'].forEach(sub => {
+    BIZ.student.forEach(stu => {
+      const base = 52 + Math.floor(rnd() * 48);
+      BIZ.score.push({ id: 'SC' + randomId(4).toUpperCase(), tenantId: 'T1001', orgId: stu.orgId,
+        studentId: stu.id, studentName: stu.name, className: stu.className || '',
+        subject: sub, score: base, full: 100, term: '2026-上' });
+    });
+  });
+
+  // 通知公告
+  [['关于开展 2026 年秋季学期期中考试的通知', '教导处', '各年级按统一安排组织期中考试，时间定于 11 月 18—20 日，请班主任提前通知学生并做好考场布置。'],
+   ['校园网络升级维护公告', '信息中心', '本周六 22:00 至次日 02:00 对核心交换机进行升级，期间校园网与智慧校园平台可能短时不可用，请提前安排。'],
+   ['关于做好冬季消防安全排查的通知', '安保处', '请各科室于本周五前完成本区域消防设施自查，重点检查配电箱、疏散通道与灭火器有效期。'],
+   ['家长会调整为线上召开', '校办', '受场地影响，本月家长会改为线上召开，具体会议链接由班主任在企业微信中下发。'],
+   ['2026 年度优秀教师评选启动', '人事科', '评选材料请于 12 月 10 日前提交至人事科，逾期视为放弃。'],
+   ['食堂菜谱更新（第 13 周）', '后勤科', '本周菜谱已更新，新增两个低油低盐窗口，欢迎师生反馈。'],
+   ['图书馆新书上架通知', '图书馆', '本月新增图书 320 册，含教辅、科普与文学类，可在平台预约借阅。'],
+   ['关于开展体质健康测试的通知', '体育组', '五年级、初一学生于下周三进行体质健康测试，请穿运动服到场。'],
+  ].forEach((n, i) => BIZ.notice.push({ id: 'N' + String(4000 + i), tenantId: 'T1001',
+    title: n[0], author: n[1], content: n[2], top: i === 0,
+    createdAt: now() - (i + 1) * 7 * 3600 * 1000, readCount: 60 + Math.floor(rnd() * 400) }));
+
+  // 请假申请
+  const REASONS = ['感冒发烧，需在家休息', '家中有事需请假一天', '参加市级数学竞赛', '牙科复诊',
+    '陪同家人就医', '参加校运动会集训', '发烧 38.5℃，已就诊', '回乡参加亲属婚礼'];
+  const STATES = [0, 0, 0, 1, 1, 2, 2];
+  for (let i = 0; i < 14; i++) {
+    const stu = BIZ.student[Math.floor(rnd() * BIZ.student.length)];
+    const state = STATES[i % STATES.length];
+    BIZ.leave.push({ id: 'L' + String(5000 + i), tenantId: 'T1001', orgId: stu.orgId,
+      studentId: stu.id, studentName: stu.name, className: stu.className || '',
+      reason: pick(REASONS), days: 1 + Math.floor(rnd() * 3), state,
+      applyAt: now() - i * 7 * 3600 * 1000, approver: state === 0 ? '' : '陈老师' });
+  }
 })();
 function domainFilter(u, rows) {
   const me = get('SELECT * FROM orgs WHERE id=?', u.org_id);
@@ -587,6 +653,262 @@ R('POST', '/base/api/teacher/page', async (ctx) => {
 R('POST', '/base/api/class/page', async (ctx) => {
   ok(ctx.res, paged(domainFilter(ctx.user, BIZ.klass.filter(s => s.tenantId === ctx.user.tenant_id)), ctx.body));
 }, { auth: true, page: 'base_class' });
+
+/* ---------- 成绩管理 ---------- */
+R('POST', '/base/api/score/page', async (ctx) => {
+  const b = ctx.body;
+  let rows = domainFilter(ctx.user, BIZ.score.filter(s => s.tenantId === ctx.user.tenant_id));
+  if (b.subject) rows = rows.filter(r => r.subject === b.subject);
+  if (b.className) rows = rows.filter(r => r.className === b.className);
+  if (b.keyword) rows = rows.filter(r => (r.studentName + r.studentId).includes(b.keyword));
+  const p = paged(rows, b);
+  const avg = rows.length ? +(rows.reduce((a, r) => a + r.score, 0) / rows.length).toFixed(1) : 0;
+  const pass = rows.length ? +((rows.filter(r => r.score >= 60).length / rows.length) * 100).toFixed(1) : 0;
+  const bySubject = {};
+  rows.forEach(r => { (bySubject[r.subject] = bySubject[r.subject] || []).push(r.score); });
+  const subjectStat = Object.entries(bySubject).map(([k, v]) => ({
+    subject: k, avg: +(v.reduce((a, x) => a + x, 0) / v.length).toFixed(1),
+    max: Math.max(...v), min: Math.min(...v), count: v.length,
+    passRate: +((v.filter(x => x >= 60).length / v.length) * 100).toFixed(1),
+  }));
+  ok(ctx.res, { ...p, stat: { avg, passRate: pass, total: rows.length, bySubject: subjectStat } });
+}, { auth: true, page: 'base_score' });
+
+R('POST', '/base/api/score/save', async (ctx) => {
+  if (!hasBtn(ctx.user, 'base_score_insert')) return fail(ctx.res, 403, '暂无权限');
+  const b = ctx.body;
+  const stu = BIZ.student.find(s => s.id === b.studentId && s.tenantId === ctx.user.tenant_id);
+  if (!stu) return fail(ctx.res, 404, '学生不存在');
+  const me = get('SELECT * FROM orgs WHERE id=?', ctx.user.org_id);
+  const org = get('SELECT * FROM orgs WHERE id=?', stu.orgId);
+  if (!org || !org.path.startsWith(me.path)) return fail(ctx.res, 403, '无权录入该学生成绩');
+  const sc = Number(b.score);
+  if (!(sc >= 0 && sc <= 100)) return fail(ctx.res, 400, '分数需在 0~100 之间');
+  const exist = BIZ.score.find(s => s.studentId === stu.id && s.subject === b.subject && s.term === (b.term || '2026-上'));
+  if (exist) exist.score = sc;
+  else BIZ.score.push({ id: 'SC' + randomId(4).toUpperCase(), tenantId: ctx.user.tenant_id, orgId: stu.orgId,
+    studentId: stu.id, studentName: stu.name, className: stu.className || '', subject: b.subject,
+    score: sc, full: 100, term: b.term || '2026-上' });
+  log({ tenant_id: ctx.user.tenant_id, user_id: ctx.user.id, user_name: ctx.user.user_name, ip: ctx.ip,
+    method: 'POST', path: ctx.path, status: 0, detail: `录入成绩 ${stu.name} ${b.subject}=${sc}` });
+  ok(ctx.res, true);
+}, { auth: true });
+
+/* ---------- 通知公告 ---------- */
+R('POST', '/base/api/notice/page', async (ctx) => {
+  const b = ctx.body;
+  let rows = BIZ.notice.filter(n => n.tenantId === ctx.user.tenant_id);
+  if (b.keyword) rows = rows.filter(n => (n.title + n.content + n.author).includes(b.keyword));
+  rows = rows.slice().sort((x, y) => (y.top - x.top) || (y.createdAt - x.createdAt));
+  ok(ctx.res, paged(rows, b));
+}, { auth: true, page: 'base_notice' });
+
+R('GET', '/base/api/notice/detail', async (ctx) => {
+  const n = BIZ.notice.find(x => x.id === ctx.query.id && x.tenantId === ctx.user.tenant_id);
+  if (!n) return fail(ctx.res, 404, '通知不存在');
+  n.readCount += 1;
+  ok(ctx.res, n);
+}, { auth: true, page: 'base_notice' });
+
+R('POST', '/base/api/notice/save', async (ctx) => {
+  if (!hasBtn(ctx.user, 'base_notice_publish')) return fail(ctx.res, 403, '暂无权限');
+  const b = ctx.body;
+  if (!b.title || !b.content) return fail(ctx.res, 400, '标题和正文不能为空');
+  const n = { id: 'N' + randomId(4).toUpperCase(), tenantId: ctx.user.tenant_id,
+    title: b.title, author: ctx.user.real_name || ctx.user.user_name, content: b.content,
+    top: !!b.top, createdAt: now(), readCount: 0 };
+  BIZ.notice.unshift(n);
+  log({ tenant_id: ctx.user.tenant_id, user_id: ctx.user.id, user_name: ctx.user.user_name, ip: ctx.ip,
+    method: 'POST', path: ctx.path, status: 0, detail: '发布通知 ' + b.title });
+  ok(ctx.res, n);
+}, { auth: true });
+
+/* ---------- 请假审批 ---------- */
+R('POST', '/base/api/leave/page', async (ctx) => {
+  const b = ctx.body;
+  let rows = domainFilter(ctx.user, BIZ.leave.filter(s => s.tenantId === ctx.user.tenant_id));
+  if (b.state !== undefined && b.state !== '' && b.state !== null) rows = rows.filter(r => r.state === Number(b.state));
+  if (b.keyword) rows = rows.filter(r => (r.studentName + r.reason).includes(b.keyword));
+  rows = rows.slice().sort((x, y) => y.applyAt - x.applyAt);
+  const st = { pending: rows.filter(r => r.state === 0).length,
+    passed: rows.filter(r => r.state === 1).length,
+    refused: rows.filter(r => r.state === 2).length };
+  ok(ctx.res, { ...paged(rows, b), stat: st });
+}, { auth: true, page: 'base_leave' });
+
+R('POST', '/base/api/leave/apply', async (ctx) => {
+  const b = ctx.body;
+  if (!b.studentId || !b.reason) return fail(ctx.res, 400, '学生与请假事由不能为空');
+  const stu = BIZ.student.find(s => s.id === b.studentId && s.tenantId === ctx.user.tenant_id);
+  if (!stu) return fail(ctx.res, 404, '学生不存在');
+  const l = { id: 'L' + randomId(4).toUpperCase(), tenantId: ctx.user.tenant_id, orgId: stu.orgId,
+    studentId: stu.id, studentName: stu.name, className: stu.className || '',
+    reason: b.reason, days: Math.max(1, Number(b.days || 1)), state: 0, applyAt: now(), approver: '' };
+  BIZ.leave.unshift(l);
+  log({ tenant_id: ctx.user.tenant_id, user_id: ctx.user.id, user_name: ctx.user.user_name, ip: ctx.ip,
+    method: 'POST', path: ctx.path, status: 0, detail: '提交请假 ' + stu.name });
+  ok(ctx.res, l);
+}, { auth: true });
+
+R('POST', '/base/api/leave/approve', async (ctx) => {
+  if (!hasBtn(ctx.user, 'base_leave_approve')) return fail(ctx.res, 403, '暂无权限');
+  const { leaveId, pass, remark } = ctx.body;
+  const l = BIZ.leave.find(x => x.id === leaveId && x.tenantId === ctx.user.tenant_id);
+  if (!l) return fail(ctx.res, 404, '申请不存在');
+  if (l.state !== 0) return fail(ctx.res, 400, '该申请已处理');
+  const me = get('SELECT * FROM orgs WHERE id=?', ctx.user.org_id);
+  const org = get('SELECT * FROM orgs WHERE id=?', l.orgId);
+  if (!org || !org.path.startsWith(me.path)) return fail(ctx.res, 403, '无权审批该机构申请');
+  l.state = pass ? 1 : 2;
+  l.approver = ctx.user.real_name || ctx.user.user_name;
+  l.remark = remark || '';
+  log({ tenant_id: ctx.user.tenant_id, user_id: ctx.user.id, user_name: ctx.user.user_name, ip: ctx.ip,
+    method: 'POST', path: ctx.path, status: 0, detail: `${pass ? '批准' : '驳回'}请假 ${l.studentName}` });
+  ok(ctx.res, { state: l.state });
+}, { auth: true });
+
+/* ---------- AI 问答（OpenAI 兼容代理：云端 API → 本地 Ollama → 离线兜底） ---------- */
+const AI_CFG = {
+  baseUrl: process.env.AI_BASE_URL || '',
+  apiKey: process.env.AI_API_KEY || '',
+  model: process.env.AI_MODEL || '',
+};
+let aiCache = null, aiCacheAt = 0;
+
+/** 探测可用后端：显式配置 → 本机 Ollama → null（离线） */
+async function aiEndpoint() {
+  if (AI_CFG.baseUrl) return { ...AI_CFG, kind: 'remote' };
+  if (aiCache && now() - aiCacheAt < 60000) return aiCache;
+  try {
+    const r = await fetch('http://127.0.0.1:11434/api/tags', { signal: AbortSignal.timeout(1200) });
+    if (r.ok) {
+      const j = await r.json();
+      const m = (j.models || []).find(x => /qwen|llama|deepseek|glm|mistral/i.test(x.name));
+      if (m) { aiCache = { baseUrl: 'http://127.0.0.1:11434/v1', apiKey: 'ollama', model: m.name, kind: 'local' }; aiCacheAt = now(); return aiCache; }
+    }
+  } catch { /* 没有本地模型 */ }
+  aiCache = null; aiCacheAt = now();
+  return null;
+}
+
+const AI_SYSTEM = `你是「智慧校园平台」的智能助手，面向老师、家长和访客回答问题。
+你可以回答两类问题：
+1) 平台使用类：登录方式（账号密码/短信/扫码）、租户概念、机构树、学生/教师/班级管理、成绩录入与统计、
+   通知公告发布、请假审批流程、注册需要审批、页面权限与按钮权限的区别、一次性 Token 跨系统登录。
+2) 教育/学校日常类的一般性咨询。
+规则：回答简洁（200 字以内为佳），用中文，不要编造平台上不存在的功能；不确定时说明「平台上没有这项功能」。
+平台演示账号：admin/Admin@2026（学校管理员）、head1/Head@2026（班主任）、teacher1/Teach@2026（教师）。`;
+
+const AI_KB = [
+  [/怎么登录|如何登录|登录方式/, '三种登录方式：① 账号密码（选租户后输入 admin/Admin@2026）；② 短信验证码（手机号 13800000001，演示环境验证码直接回显）；③ 扫码登录（点「确认页」在新窗口用同一账号登录并确认，原窗口自动进入）。'],
+  [/扫码|二维码/, '扫码登录流程：电脑端点「扫码登录」生成二维码（服务端一次性 onceToken，2 分钟有效）→ 手机打开确认页 → 显示「发起方 UA / 有效期 / 状态」→ 点「确认登录」→ 电脑端拿到会话。若显示「已被消费」说明该 onceToken 已用过，需刷新二维码。'],
+  [/注册|申请账号/, '登录页点「注册」→ 填手机号获取验证码 → 填姓名/账号/密码/机构 → 提交。提交后是「待审核」状态，不会立刻建号；需要学校管理员在「注册审批」里点通过，账号才生效。这是刻意的限制，防止陌生人自助注册。'],
+  [/权限|看不到|没权限|403/, '平台有两级权限：页面权限码（page，决定侧边栏能看到哪些页）和按钮权限码（btn，决定能不能执行写操作）。关键点是**两者都在服务端校验**，绕过前端直接调接口同样返回 403。教师角色只有学生/班级/成绩的只读权限，班主任额外有成绩录入和请假审批。'],
+  [/成绩|分数|录入/, '成绩管理支持按学科、班级、姓名筛选，并实时给出平均分、及格率和分学科统计。有「base_score_insert」按钮权限的角色（管理员/班主任）可以录入或修改分数，服务端会校验分数范围 0~100 以及目标学生是否在自己的机构数据域内。'],
+  [/请假|审批/, '请假流程：提交申请（学生 + 事由 + 天数）→ 状态「待审批」→ 有「base_leave_approve」权限的角色审批 → 通过/驳回并记录审批人。服务端会校验申请机构是否在自己管辖范围内。'],
+  [/通知|公告|发布/, '通知公告支持置顶、搜索、详情查看（每看一次阅读数 +1）。发布需要「base_notice_publish」按钮权限，标题与正文不能为空。'],
+  [/机构|部门|组织/, '机构树按 parentId 递归，每个机构有 path 字段（如 O100,O101,O104）。数据域规则：只能访问 path 以自己机构 path 开头的机构及其下级。所以小学部管理员看不到初中部的数据。'],
+  [/一次性|token|单点|跨系统/, '跨系统登录用一次性 Token：本系统用当前会话换取 token（60 秒有效）→ 拼到目标系统 → 目标系统用它兑换自己的会话，兑换后立即失效（第二次会返回「凭证无效」）。'],
+  [/加密|aes|安全/, '所有业务请求都要求 AES-256-CBC 加密 body（字段 yscryp）并带 HMAC-SHA256 签名、时间戳和一次性 nonce；服务端强制校验，明文请求直接返回「请求必须加密」，重放同一个 nonce 会被拒。'],
+  [/租户|多租户/, '平台是多租户的：每个租户有独立标识（如 demo / district / closed）。登录前先选租户，不同租户的机构、账号、数据互相隔离；closed 租户关闭了注册，可以用来观察「未开放注册」的提示。'],
+  [/审计|日志/, '所有登录、写操作、审批都会写审计日志，包含操作人、时间、方法、路径、IP 和详情。管理员可在「审计日志」页查看，被拒绝的请求同样留痕。'],
+];
+
+function aiOffline(q) {
+  for (const [re, a] of AI_KB) if (re.test(q)) return a;
+  return '当前 AI 后端未配置（演示环境没有可用的模型服务），我只能回答平台使用相关的问题。你可以问我：怎么登录、扫码怎么用、为什么看不到某些菜单、成绩怎么录、请假怎么审批、注册为什么要审核、一次性 Token 是什么。';
+}
+
+R('POST', '/base/api/ai/chat', async (ctx) => {
+  const msgs = Array.isArray(ctx.body.messages) ? ctx.body.messages.slice(-10) : [];
+  const last = [...msgs].reverse().find(m => m.role === 'user');
+  if (!last || !String(last.content || '').trim()) return fail(ctx.res, 400, '请输入问题');
+  if (String(last.content).length > 2000) return fail(ctx.res, 400, '问题过长');
+
+  const ep = await aiEndpoint();
+  const res = ctx.res;
+
+  // 无模型：直接返回离线答案（JSON）
+  if (!ep) {
+    return ok(res, { answer: aiOffline(last.content), mode: 'offline', model: null });
+  }
+
+  // 有模型：SSE 流式转发
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream; charset=utf-8',
+    'Cache-Control': 'no-cache, no-transform',
+    Connection: 'keep-alive',
+    'X-AI-Mode': ep.kind,
+    'X-AI-Model': ep.model,
+  });
+  const sendSse = (o) => res.write(`data: ${JSON.stringify(o)}\n\n`);
+  try {
+    const upstream = await fetch(ep.baseUrl.replace(/\/+$/, '') + '/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + (ep.apiKey || 'none') },
+      body: JSON.stringify({
+        model: ep.model, stream: true, temperature: 0.3, max_tokens: 800,
+        messages: [{ role: 'system', content: AI_SYSTEM }, ...msgs.map(m => ({ role: m.role, content: String(m.content) }))],
+      }),
+      signal: AbortSignal.timeout(120000),
+    });
+    if (!upstream.ok || !upstream.body) {
+      const t = await upstream.text().catch(() => '');
+      sendSse({ error: '模型服务返回异常：' + (t.slice(0, 120) || upstream.status) });
+      res.end();
+      return;
+    }
+    const reader = upstream.body.getReader();
+    const dec = new TextDecoder();
+    let buf = '', answer = '';
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, { stream: true });
+      let i;
+      while ((i = buf.indexOf('\n')) >= 0) {
+        const line = buf.slice(0, i).trim();
+        buf = buf.slice(i + 1);
+        if (!line.startsWith('data:')) continue;
+        const data = line.slice(5).trim();
+        if (data === '[DONE]') { i = -2; break; }
+        try {
+          const j = JSON.parse(data);
+          const delta = j.choices?.[0]?.delta?.content || '';
+          if (delta) { answer += delta; sendSse({ delta }); }
+        } catch { /* 忽略非 JSON 行 */ }
+      }
+      if (i === -2) break;
+    }
+    sendSse({ done: true, mode: ep.kind, model: ep.model, length: answer.length });
+    res.write('data: [DONE]\n\n');
+    res.end();
+    log({ tenant_id: ctx.user.tenant_id, user_id: ctx.user.id, user_name: ctx.user.user_name, ip: ctx.ip,
+      method: 'POST', path: ctx.path, status: 0, detail: `AI 问答（${ep.kind}/${ep.model}）${String(last.content).slice(0, 40)}` });
+  } catch (e) {
+    try { sendSse({ error: '调用模型失败：' + (e.message || e) }); res.end(); } catch { /* ignore */ }
+  }
+}, { auth: true });
+
+/* ---------- 调试接口（仅演示环境，SHOW_DEV_CODE=1 时可用） ---------- */
+if (SHOW_DEV_CODE) {
+  R('POST', '/base/api/dev/reset-user', async (ctx) => {
+    const { userName, tenantId } = ctx.body;
+    run('UPDATE users SET fail_count=0, locked_until=0 WHERE user_name=? AND tenant_id=?', userName, tenantId);
+    run('DELETE FROM sms WHERE phone IN (SELECT phone FROM users WHERE user_name=? AND tenant_id=?)', userName, tenantId);
+    ok(ctx.res, { reset: true });
+  }, { encrypt: false });
+  R('POST', '/base/api/dev/reset-sms-limit', async (ctx) => {
+    run("DELETE FROM audit WHERE path='/base/api/auth/sms/code/send'");
+    if (ctx.body && ctx.body.clearCodes) run('DELETE FROM sms');
+    ok(ctx.res, { cleared: true });
+  }, { encrypt: false });
+  R('POST', '/base/api/dev/seed-reset', async (ctx) => {
+    if (!ctx.body.confirm) return fail(ctx.res, 400, '需要 confirm:true');
+    run("DELETE FROM applies WHERE state<>0");
+    ok(ctx.res, { ok: true });
+  }, { encrypt: false });
+}
 
 /* ---------- 审计日志 ---------- */
 R('GET', '/base/api/audit/page', async (ctx) => {

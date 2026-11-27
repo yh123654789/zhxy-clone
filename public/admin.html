@@ -38,6 +38,9 @@ const PAGES = [
   { key: 'student', title: '学生管理', perm: 'base_student' },
   { key: 'teacher', title: '教师管理', perm: 'base_teacher' },
   { key: 'klass', title: '班级管理', perm: 'base_class' },
+  { key: 'score', title: '成绩管理', perm: 'base_score' },
+  { key: 'notice', title: '通知公告', perm: 'base_notice' },
+  { key: 'leave', title: '请假审批', perm: 'base_leave' },
   { key: 'org', title: '机构树', perm: 'base_org' },
   { key: 'apply', title: '注册审批', perm: 'sys_apply' },
   { key: 'audit', title: '审计日志', perm: 'sys_audit' },
@@ -81,6 +84,7 @@ function route() {
   $('pageTitle').textContent = page.title;
   $('pageActions').innerHTML = '';
   ({ home: viewHome, student: viewStudent, teacher: viewTeacher, klass: viewKlass,
+     score: viewScore, notice: viewNotice, leave: viewLeave, ai: viewAi,
      org: viewOrg, apply: viewApply, audit: viewAudit, swap: viewSwap })[page.key]();
 }
 
@@ -240,6 +244,229 @@ async function useOnce() {
   $('swapOut').innerHTML += `<br/>第一次兑换：${r.code === 0 ? '成功（已签发新会话）' : r.msg}`;
   const r2 = await api('/base/api/auth/swap/token/byonce', {}, { method: 'GET', query: { oncetoken: lastOnce } });
   $('swapOut').innerHTML += `<br/>第二次兑换：<span style="color:var(--danger)">${r2.code === 0 ? '竟然还成功？' : r2.msg + '（符合预期：一次性）'}</span>`;
+}
+
+/* ---------------- 成绩管理 ---------------- */
+let scoreFilter = { subject: '', className: '', keyword: '' };
+async function viewScore() {
+  $('pageActions').innerHTML = CANBTN('base_score_insert')
+    ? `<button class="btn small" onclick="addScore()">录入成绩</button>` : '';
+  const r = await api('/base/api/score/page', { pageIndex: 1, pageSize: 10, ...scoreFilter });
+  if (r.code !== 0) return $('view').innerHTML = `<div class="card">${r.msg}</div>`;
+  const st = r.data.stat;
+  const bar = st.bySubject.map(s => `
+    <div style="margin:8px 0">
+      <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--dim)">
+        <span>${s.subject}</span><span>均分 ${s.avg} · 及格率 ${s.passRate}% · ${s.count} 人</span>
+      </div>
+      <div style="height:8px;background:#0e1a2b;border-radius:99px;overflow:hidden;margin-top:4px">
+        <div style="height:100%;width:${s.avg}%;background:linear-gradient(90deg,var(--brand2),var(--brand))"></div>
+      </div>
+    </div>`).join('');
+  $('view').innerHTML = `
+    <div class="grid2" style="margin-bottom:14px">
+      <div class="stat"><b>${st.total}</b><span>成绩条数（当前筛选）</span></div>
+      <div class="stat"><b>${st.avg}</b><span>平均分</span></div>
+      <div class="stat"><b>${st.passRate}%</b><span>及格率（≥60）</span></div>
+      <div class="stat"><b>${st.bySubject.length}</b><span>涉及学科</span></div>
+    </div>
+    <div class="card" style="margin-bottom:14px">
+      <div style="font-weight:700;margin-bottom:6px">分学科概览</div>${bar || '<div class="dim">无数据</div>'}
+    </div>
+    <div class="card">
+      <div class="toolbar">
+        <select onchange="scoreFilter.subject=this.value;viewScore()" style="max-width:130px">
+          <option value="">全部学科</option>
+          ${['语文', '数学', '英语'].map(s => `<option ${scoreFilter.subject === s ? 'selected' : ''}>${s}</option>`).join('')}
+        </select>
+        <select onchange="scoreFilter.className=this.value;viewScore()" style="max-width:150px">
+          <option value="">全部班级</option>
+          ${['五年级1班', '五年级2班', '六年级1班', '初一1班'].map(c => `<option ${scoreFilter.className === c ? 'selected' : ''}>${c}</option>`).join('')}
+        </select>
+        <input id="scoreKw" placeholder="学生姓名/学号" value="${scoreFilter.keyword}"
+               onkeydown="if(event.key==='Enter'){scoreFilter.keyword=this.value;viewScore()}" />
+        <button class="btn gray small" onclick="scoreFilter.keyword=document.getElementById('scoreKw').value;viewScore()">查询</button>
+      </div>
+      ${table([{ key: 'studentNo', title: '学号' }, { key: 'studentName', title: '姓名' },
+        { key: 'className', title: '班级' }, { key: 'subject', title: '学科' },
+        { key: 'scoreTxt', title: '分数' }, { key: 'levelTxt', title: '等级' }],
+        r.data.list.map(x => ({
+          ...x, scoreTxt: x.score,
+          levelTxt: x.score >= 90 ? '<span class="tag ok">优秀</span>'
+            : x.score >= 60 ? '<span class="tag">及格</span>' : '<span class="tag err">不及格</span>',
+        })))}
+      ${pager(r.data, 'score', viewScore)}
+    </div>`;
+}
+async function addScore() {
+  const studentId = prompt('学生 ID（如 S101）'); if (!studentId) return;
+  const subject = prompt('学科（语文/数学/英语）', '数学'); if (!subject) return;
+  const score = prompt('分数（0~100）', '88'); if (score === null) return;
+  const r = await api('/base/api/score/save', { studentId, subject, score: Number(score) });
+  toast(r.code === 0 ? '成绩已保存' : r.msg, r.code === 0 ? 'ok' : 'err');
+  viewScore();
+}
+
+/* ---------------- 通知公告 ---------------- */
+async function viewNotice() {
+  $('pageActions').innerHTML = CANBTN('base_notice_publish')
+    ? `<button class="btn small" onclick="publishNotice()">发布通知</button>` : '';
+  const r = await api('/base/api/notice/page', { pageIndex: 1, pageSize: 8 });
+  if (r.code !== 0) return $('view').innerHTML = `<div class="card">${r.msg}</div>`;
+  const list = r.data.list.map(n => `
+    <div class="notice-item" onclick="readNotice('${n.id}')">
+      <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start">
+        <div>${n.top ? '<span class="tag err" style="margin-right:6px">置顶</span>' : ''}<b>${n.title}</b></div>
+        <span class="dim" style="font-size:12px;white-space:nowrap">${new Date(n.createdAt).toLocaleDateString('zh-CN')}</span>
+      </div>
+      <div class="dim" style="font-size:12.5px;margin-top:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${n.content}</div>
+      <div class="dim" style="font-size:11.5px;margin-top:6px">${n.author} · 阅读 ${n.readCount}</div>
+    </div>`).join('');
+  $('view').innerHTML = `<div class="card">${list || '<div class="dim">暂无通知</div>'}
+      <div class="pager">共 ${r.data.total} 条</div></div>
+    <div class="card" id="noticeDetail" style="display:none;margin-top:14px"></div>`;
+}
+async function readNotice(id) {
+  const r = await api('/base/api/notice/detail', {}, { method: 'GET', query: { id } });
+  if (r.code !== 0) return toast(r.msg, 'err');
+  const n = r.data, el = $('noticeDetail');
+  el.style.display = '';
+  el.innerHTML = `<div style="display:flex;justify-content:space-between">
+      <h3 style="margin:0 0 6px">${n.title}</h3>
+      <span class="dim" style="font-size:12px">${n.author} · ${new Date(n.createdAt).toLocaleString('zh-CN')}</span>
+    </div><div class="hr"></div><div style="line-height:2;font-size:13.5px">${n.content}</div>`;
+  el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+async function publishNotice() {
+  const title = prompt('通知标题'); if (!title) return;
+  const content = prompt('通知正文'); if (!content) return;
+  const r = await api('/base/api/notice/save', { title, content, top: false });
+  toast(r.code === 0 ? '已发布' : r.msg, r.code === 0 ? 'ok' : 'err');
+  viewNotice();
+}
+
+/* ---------------- 请假审批 ---------------- */
+let leaveState = '';
+async function viewLeave() {
+  const r = await api('/base/api/leave/page', { pageIndex: 1, pageSize: 10, state: leaveState });
+  if (r.code !== 0) return $('view').innerHTML = `<div class="card">${r.msg}</div>`;
+  const st = r.data.stat;
+  const stateTag = (s) => s === 0 ? '<span class="tag warn">待审批</span>'
+    : s === 1 ? '<span class="tag ok">已通过</span>' : '<span class="tag err">已驳回</span>';
+  $('view').innerHTML = `
+    <div class="grid2" style="margin-bottom:14px">
+      <div class="stat"><b>${st.pending}</b><span>待审批</span></div>
+      <div class="stat"><b>${st.passed}</b><span>已通过</span></div>
+      <div class="stat"><b>${st.refused}</b><span>已驳回</span></div>
+    </div>
+    <div class="card">
+      <div class="toolbar">
+        ${[['', '全部'], ['0', '待审批'], ['1', '已通过'], ['2', '已驳回']].map(([v, t]) =>
+          `<button class="btn ${leaveState === v ? '' : 'gray'} small" onclick="leaveState='${v}';viewLeave()">${t}</button>`).join('')}
+      </div>
+      ${table([{ key: 'studentName', title: '学生' }, { key: 'className', title: '班级' },
+        { key: 'reason', title: '事由' }, { key: 'daysTxt', title: '天数' },
+        { key: 'stateTxt', title: '状态' }, { key: 'approver', title: '审批人' }],
+        r.data.list.map(x => ({ ...x, daysTxt: x.days + ' 天', stateTxt: stateTag(x.state) })),
+        (row) => row.state === 0 && CANBTN('base_leave_approve')
+          ? `<button class="btn small" onclick="doLeave('${row.id}',1)">通过</button>
+             <button class="btn small danger" onclick="doLeave('${row.id}',0)">驳回</button>`
+          : '<span class="dim">—</span>')}
+      ${pager(r.data, 'leave', viewLeave)}
+    </div>`;
+}
+async function doLeave(leaveId, pass) {
+  const r = await api('/base/api/leave/approve', { leaveId, pass: !!pass, remark: pass ? '' : '事由不充分' });
+  toast(r.code === 0 ? (pass ? '已通过' : '已驳回') : r.msg, r.code === 0 ? 'ok' : 'err');
+  viewLeave();
+}
+
+/* ---------------- AI 助手 ---------------- */
+let aiMsgs = [{ role: 'assistant', content: '你好，我是智慧校园平台的智能助手。可以问我：怎么登录、扫码怎么用、为什么看不到某些菜单、成绩怎么录、请假怎么审批、一次性 Token 是什么。' }];
+let aiBusy = false;
+function escapeHtml(s) { return String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+
+async function viewAi() {
+  $('pageActions').innerHTML = `<button class="btn gray small" onclick="aiMsgs=aiMsgs.slice(0,1);viewAi()">清空对话</button>`;
+  $('view').innerHTML = `
+    <div class="card chat-card">
+      <div class="chat-head"><span>智能助手</span><span class="dim" id="aiMode" style="font-size:12px">后端探测中…</span></div>
+      <div class="chat-body" id="chatBody"></div>
+      <div class="chat-input">
+        <input id="aiInput" placeholder="问点什么…（Enter 发送）"
+               onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();aiSend()}" />
+        <button class="btn" id="aiBtn" onclick="aiSend()">发送</button>
+      </div>
+      <div class="dim" style="font-size:11.5px;margin-top:8px">
+        服务端代理转发，密钥不下发浏览器；优先云端 API，未配置则自动用本机 Ollama，都没有时给离线答案。
+      </div>
+    </div>`;
+  renderChat();
+}
+function renderChat() {
+  const box = $('chatBody'); if (!box) return;
+  box.innerHTML = aiMsgs.map(m => `
+    <div class="msg ${m.role}">
+      <div class="avatar">${m.role === 'user' ? '我' : 'AI'}</div>
+      <div class="bubble">${escapeHtml(m.content).replace(/\n/g, '<br/>')}</div>
+    </div>`).join('');
+  box.scrollTop = box.scrollHeight;
+}
+async function aiSend() {
+  if (aiBusy) return;
+  const input = $('aiInput'), q = (input.value || '').trim();
+  if (!q) return;
+  input.value = '';
+  aiMsgs.push({ role: 'user', content: q });
+  aiMsgs.push({ role: 'assistant', content: '' });
+  renderChat();
+  aiBusy = true; $('aiBtn').disabled = true;
+  try {
+    const e = await encryptBody({ messages: aiMsgs.filter(m => m.content).slice(-10) });
+    const res = await fetch('/base/api/ai/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...e.headers, Authorization: 'Bearer ' + Store.token },
+      body: JSON.stringify(e.body),
+    });
+    const ct = res.headers.get('content-type') || '';
+    if (ct.includes('text/event-stream')) {
+      $('aiMode').textContent = `后端：${res.headers.get('x-ai-mode')} / ${res.headers.get('x-ai-model')}`;
+      const reader = res.body.getReader(), dec = new TextDecoder();
+      let buf = '';
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += dec.decode(value, { stream: true });
+        let i;
+        while ((i = buf.indexOf('\n\n')) >= 0) {
+          const chunk = buf.slice(0, i); buf = buf.slice(i + 2);
+          const line = chunk.split('\n').find(l => l.startsWith('data:'));
+          if (!line) continue;
+          const data = line.slice(5).trim();
+          if (data === '[DONE]') continue;
+          try {
+            const j = JSON.parse(data);
+            if (j.delta) { aiMsgs[aiMsgs.length - 1].content += j.delta; renderChat(); }
+            if (j.error) { aiMsgs[aiMsgs.length - 1].content += '\n[错误] ' + j.error; renderChat(); }
+          } catch { }
+        }
+      }
+    } else {
+      const j = await res.json();
+      if (j.code === 0 && j.data) {
+        aiMsgs[aiMsgs.length - 1].content = j.data.answer;
+        $('aiMode').textContent = `后端：${j.data.mode}${j.data.model ? ' / ' + j.data.model : ''}`;
+      } else aiMsgs[aiMsgs.length - 1].content = j.msg || '请求失败';
+      renderChat();
+    }
+  } catch (err) {
+    aiMsgs[aiMsgs.length - 1].content = '调用失败：' + err.message;
+    renderChat();
+  } finally {
+    aiBusy = false; $('aiBtn').disabled = false;
+    if (!aiMsgs[aiMsgs.length - 1].content) aiMsgs[aiMsgs.length - 1].content = '（无输出）';
+    renderChat();
+  }
 }
 
 function logout() {

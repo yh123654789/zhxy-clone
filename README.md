@@ -19,7 +19,14 @@ node smoke.js             # 端到端测试（35 项）
 | 管理后台（按权限渲染） | `/admin.html` |
 | 手机端扫码确认 | `/scan.html?t=<onceToken>` |
 
-演示账号（租户 `demo`）：`admin / Admin@2026`、`teacher1 / Teach@2026`、`root / Root@2026`
+演示账号（租户 `demo`）：
+
+| 账号 | 密码 | 角色 | 权限差异 |
+|---|---|---|---|
+| `admin` | `Admin@2026` | 学校管理员 | 全部业务页 + 注册审批 + 审计 |
+| `head1` / `head2` | `Head@2026` | 班主任 | 学生/班级/成绩/通知/请假；可录入成绩、审批请假 |
+| `teacher1` | `Teach@2026` | 教师 | 只读：学生/班级/成绩/通知，无任何写权限 |
+| `root` | `Root@2026` | 超级管理员 | 通配权限 `*`
 
 ## 让别人访问
 
@@ -85,6 +92,10 @@ Stop-Process -Id <PID>  # 关闭隧道
 | 学生/教师/班级 | `POST /base/api/student|teacher|class/page` | 分页 + 数据域 |
 | 一次性 Token | `POST /base/api/auth/swap/once/token` → `GET …/byonce?oncetoken=` | 60 秒、用一次即失效 |
 | 审计 | `GET /base/api/audit/page` | 谁在何时调了什么 |
+| **成绩** | `POST /base/api/score/page` / `score/save` | 学科/班级/姓名筛选，返回均分、及格率、分学科统计；录入校验 0~100 + 数据域 |
+| **通知** | `POST /base/api/notice/page` / `notice/save` / `GET notice/detail` | 置顶排序、搜索、阅读计数；发布需按钮权限 |
+| **请假** | `POST /base/api/leave/page` / `leave/apply` / `leave/approve` | 状态流转 待审→通过/驳回，审批校验数据域 |
+| **AI 问答** | `POST /base/api/ai/chat` | SSE 流式；云端 API → 本机 Ollama → 离线兜底 |
 
 ## 与原系统的对照（每一条都是实测过的缺陷 → 这里的修法）
 
@@ -130,6 +141,38 @@ public/
   style.css        样式
 data.db            SQLite 数据（首次启动自动建表 + 种子）
 ```
+
+## AI 智能助手
+
+后端 `/base/api/ai/chat` 是一个 **OpenAI 兼容代理**，三层回退：
+
+| 优先级 | 条件 | 说明 |
+|---|---|---|
+| 1 | 配了 `AI_BASE_URL` + `AI_API_KEY` + `AI_MODEL` | 任意 OpenAI 兼容服务（DeepSeek/通义/OpenAI/Moonshot…） |
+| 2 | 本机 `127.0.0.1:11434` 有 Ollama 模型 | 自动探测并选用 qwen/llama/deepseek 系模型，**无需 key** |
+| 3 | 都没有 | 返回内置知识库答案（平台使用类问题） |
+
+- 密钥只在服务端使用，永不下发浏览器；
+- 响应是 **SSE 流式**，前端逐字渲染；离线兜底返回普通 JSON；
+- 需要登录才能用（防白嫖）；
+- 系统提示词限定了助手角色：只答平台使用与一般教育咨询，不编造功能。
+
+```bash
+# 用云端模型
+AI_BASE_URL=https://api.deepseek.com/v1 AI_API_KEY=sk-xxx AI_MODEL=deepseek-chat node server.js
+# 用本机 Ollama（什么都不用配，自动探测）
+node server.js
+```
+
+## 演示环境专用接口
+
+`SHOW_DEV_CODE=1` 时额外开放（生产请设 `0`）：
+
+| 接口 | 用途 |
+|---|---|
+| `POST /base/api/dev/reset-user` | 重置某账号的失败计数/锁定 |
+| `POST /base/api/dev/reset-sms-limit` | 清短信频控记录（`clearCodes:true` 连验证码一起清） |
+| `POST /base/api/dev/seed-reset` | 清理测试注册申请 |
 
 ## 改造建议（想接真实业务时）
 

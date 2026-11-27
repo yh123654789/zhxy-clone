@@ -65,7 +65,9 @@ function expect(name, cond, detail = '') {
   expect('首次密文请求通过', first.code === 0 && first.data.operationType === 5);
   expect('重放同一 nonce 被拒', second.code === 400 && /重放/.test(second.msg), second.msg);
 
-  /* 4. 错误口令 → 失败计数；连续 2 次后要求图形码 */
+  /* 4. 错误口令 → 失败计数；连续 2 次后要求图形码（先重置计数，保证可重复跑） */
+  await call('POST', '/base/api/dev/reset-user', { tenantId: T, userName: 'teacher1' }, { plain: true });
+  await call('POST', '/base/api/dev/reset-user', { tenantId: T, userName: 'admin' }, { plain: true });
   r = await call('POST', '/base/api/auth/loginByUserPwdNoOrg', { tenantId: T, userName: 'teacher1', password: 'wrong' });
   expect('错误口令被拒并计数', r.json.code === 2002 && /1\/5/.test(r.json.msg), r.json.msg);
   r = await call('POST', '/base/api/auth/loginByUserPwdNoOrg', { tenantId: T, userName: 'teacher1', password: 'wrong' });
@@ -94,8 +96,9 @@ function expect(name, cond, detail = '') {
   r = await call('POST', '/base/api/auth/loginByUserPwdNoOrg', { tenantId: T, userName: 'teacher1', password: 'Teach@2026' });
   // 该账号已被失败计数污染，可能要求验证码；用短信登录更稳
   if (r.json.code !== 0) {
+    await call('POST', '/base/api/dev/reset-sms-limit', { clearCodes: true }, { plain: true });
     const sms = await call('POST', '/base/api/auth/sms/code/send', { phone: '13800000002' });
-    r = await call('POST', '/base/api/auth/loginByPhoneSms', { tenantId: T, phone: '13800000002', smsCode: String(sms.json.data.devCode) });
+    r = await call('POST', '/base/api/auth/loginByPhoneSms', { tenantId: T, phone: '13800000002', smsCode: String((sms.json.data || {}).devCode || '') });
   }
   expect('教师登录成功', r.json.code === 0);
   const teacherToken = r.json.data.userToken.accessToken;
@@ -137,15 +140,17 @@ function expect(name, cond, detail = '') {
   r = await call('GET', '/base/api/auth/swap/token/byonce?oncetoken=' + onceT, {}, { plain: true });
   expect('二次兑换被拒（一次性）', r.json.code === 401, r.json.msg);
 
-  /* 11. 注册审批流 */
+  /* 11. 注册审批流（账号名随机；先解除短信频控，保证可重复跑） */
+  await call('POST', '/base/api/dev/reset-sms-limit', { clearCodes: true }, { plain: true });
+  const newUser = 'nt' + String(Date.now()).slice(-6);
   const phone = '137' + String(Math.floor(Math.random() * 90000000) + 10000000);
   r = await call('POST', '/base/api/auth/sms/code/send', { phone });
-  expect('发送注册短信', r.json.code === 0 && !!r.json.data.devCode, `devCode=${r.json.data && r.json.data.devCode}`);
+  expect('发送注册短信', r.json.code === 0 && !!(r.json.data && r.json.data.devCode), `code=${r.json.code} msg=${r.json.msg}`);
   const code = r.json.data.devCode;
   r = await call('POST', '/base/api/auth/sms/code/send', { phone });
   expect('60 秒内重复发送被限流', r.json.code === 429, r.json.msg);
   r = await call('POST', '/base/api/auth/signUp/v2', {
-    tenantId: T, orgId: 'O101', phone, smsCode: code, realName: '新老师', userName: 'newteacher', password: 'New@2026',
+    tenantId: T, orgId: 'O101', phone, smsCode: code, realName: '新老师', userName: newUser, password: 'New@2026',
   });
   expect('提交注册 → 待审核（不建号）', r.json.code === 0 && r.json.data.state === 2 && r.json.data.accountCreated === false,
     `applyId=${r.json.data && r.json.data.applyId}`);
@@ -154,7 +159,7 @@ function expect(name, cond, detail = '') {
   expect('教师无审批权限 → 拒绝', r.json.code === 403, r.json.msg);
   r = await call('POST', '/base/api/auth/register/apply', { applyId, pass: true }, { token: adminToken });
   expect('管理员批准 → 建号成功', r.json.code === 0 && r.json.data.state === 1);
-  r = await call('POST', '/base/api/auth/loginByUserPwdNoOrg', { tenantId: T, userName: 'newteacher', password: 'New@2026' });
+  r = await call('POST', '/base/api/auth/loginByUserPwdNoOrg', { tenantId: T, userName: newUser, password: 'New@2026' });
   expect('新账号可登录', r.json.code === 0 && r.json.data.operationType === 5);
 
   /* 12. 关闭注册的租户 */
