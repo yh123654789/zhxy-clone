@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1" />
+<title>扫码确认登录</title>
+<link rel="stylesheet" href="/style.css" />
+<style>
+  body { display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 20px; }
+  .phone { width: 100%; max-width: 380px; }
+  .big { font-size: 17px; font-weight: 800; margin: 6px 0 2px; }
+  .kv { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px dashed var(--line); font-size: 13px; }
+  .kv span:last-child { color: var(--dim); }
+  .warnbox { background: rgba(224,163,62,.12); border: 1px solid rgba(224,163,62,.35); color: #f0c579;
+    border-radius: 10px; padding: 12px 14px; font-size: 12.5px; line-height: 1.8; margin: 14px 0; }
+</style>
+</head>
+<body>
+<div class="card phone">
+  <div class="brand" style="margin-bottom:14px"><i></i> 扫码确认登录</div>
+  <div id="body">
+    <div class="dim">正在读取会话…</div>
+  </div>
+</div>
+
+<script src="/app.js"></script>
+<script>
+const $ = (id) => document.getElementById(id);
+const t = new URL(location.href).searchParams.get('t') || '';
+
+(async () => {
+  if (!t) { $('body').innerHTML = '<div class="err">缺少会话参数 t</div>'; return; }
+  const info = await api('/base/api/auth/scan/info', {}, { method: 'GET', query: { t }, encrypt: false });
+  if (info.code !== 0) { $('body').innerHTML = `<div class="err">${info.msg}</div>`; return; }
+
+  const d = info.data;
+  const expired = d.expireAt < Date.now();
+  const who = Store.token ? await api('/base/api/auth/user/current/detail', {}, { method: 'GET' }) : null;
+
+  $('body').innerHTML = `
+    <div class="big">${Store.token ? '确认在这台设备上登录？' : '请先登录你的账号'}</div>
+    <div class="dim" style="font-size:12.5px">PC 端发起的登录请求，确认后该设备将获得你的会话。</div>
+    <div style="margin:14px 0">
+      <div class="kv"><span>租户</span><span>${d.tenantId}</span></div>
+      <div class="kv"><span>发起方 UA</span><span style="max-width:60%;text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${(d.ua || '-').slice(0, 40)}</span></div>
+      <div class="kv"><span>有效期</span><span>${expired ? '已过期' : Math.round((d.expireAt - Date.now()) / 1000) + ' 秒'}</span></div>
+      <div class="kv"><span>状态</span><span>${d.state === 0 ? '待确认' : d.state === 3 ? '已确认' : '未知'}</span></div>
+    </div>
+    <div class="warnbox">
+      确认后，<b>发起方的浏览器</b>将获得你的登录状态。若你不认识这个请求，请不要确认 —— 这正是防范「扫码登录劫持」的关键一步。
+    </div>
+    ${Store.token ? `
+      <div class="kv"><span>当前身份</span><span>${who && who.code === 0 ? who.data.realName + '（' + who.data.roleName + '）' : '未登录'}</span></div>
+      <button class="btn" id="ok" style="width:100%;margin-top:14px" ${expired ? 'disabled' : ''}>确 认 登 录</button>
+      <button class="btn gray" id="cancel" style="width:100%;margin-top:8px">取 消</button>
+    ` : `
+      <label>账号</label><input id="u" placeholder="teacher1" />
+      <label>密码</label><input id="p" type="password" placeholder="Teach@2026" />
+      <label>租户 ID</label><input id="tid" value="${d.tenantId}" />
+      <button class="btn" id="login" style="width:100%;margin-top:14px">登录后确认</button>
+    `}
+  `;
+
+  if (Store.token) {
+    $('ok').onclick = async () => {
+      const r = await api('/base/api/auth/scan/confirm', { onceToken: t });
+      if (r.code === 0) { $('body').innerHTML = '<div class="big">✅ 已确认</div><div class="dim">请回到电脑端查看，登录已完成。</div>'; }
+      else toast(r.msg, 'err');
+    };
+    $('cancel').onclick = () => { $('body').innerHTML = '<div class="big">已取消</div><div class="dim">PC 端二维码将在 2 分钟后失效。</div>'; };
+  } else {
+    $('login').onclick = async () => {
+      const r = await api('/base/api/auth/loginByUserPwdNoOrg', {
+        tenantId: $('tid').value.trim(), userName: $('u').value.trim(), password: $('p').value,
+      });
+      if (r.code === 0 && r.data.operationType === 5) { Store.token = r.data.userToken.accessToken; location.reload(); }
+      else toast(r.msg, 'err');
+    };
+  }
+})();
+</script>
+</body>
+</html>

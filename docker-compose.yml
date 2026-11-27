@@ -1,0 +1,21 @@
+services:
+  web:
+    build: .
+    image: zhxy-clone:latest
+    container_name: zhxy-clone
+    restart: unless-stopped
+    ports:
+      - "8099:8099"
+    environment:
+      # 访问口令：留空则任何人可打开；公网部署请务必设置
+      ACCESS_CODE: "${ACCESS_CODE:-}"
+      SHOW_DEV_CODE: "1"
+    volumes:
+      # 数据持久化（sqlite 单文件）
+      - ./data:/data
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8099/base/api/tenant/query?uniqueName=demo').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s

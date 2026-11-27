@@ -1,0 +1,36 @@
+# fly.io 部署配置（免费额度内可用，支持持久卷）
+# 首次：flyctl launch --no-deploy --copy-config  →  flyctl volumes create data --size 1  →  flyctl deploy
+app = "zhxy-clone-demo"
+primary_region = "nrt"
+
+[build]
+
+[env]
+  PORT = "8099"
+  DATA_DIR = "/data"
+  NODE_ENV = "production"
+  SHOW_DEV_CODE = "1"
+  # ACCESS_CODE 用 secret 注入： flyctl secrets set ACCESS_CODE=xxxx
+
+[http_service]
+  internal_port = 8099
+  force_https = true
+  auto_stop_machines = false      # 不自动停，保证一直可用
+  auto_start_machines = true
+  min_machines_running = 1
+  processes = ["app"]
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"
+
+[[mounts]]
+  source = "data"
+  destination = "/data"
+
+[[http_service.checks]]
+  interval = "30s"
+  timeout = "5s"
+  grace_period = "10s"
+  method = "GET"
+  path = "/base/api/tenant/query?uniqueName=demo"

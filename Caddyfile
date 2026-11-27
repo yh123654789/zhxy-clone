@@ -1,0 +1,17 @@
+# Caddy 反向代理 + 自动 HTTPS（把 your-domain.com 换成你的域名，域名 A 记录指向服务器 IP）
+# 部署： sudo cp Caddyfile /etc/caddy/Caddyfile && sudo systemctl reload caddy
+
+your-domain.com {
+	encode gzip
+	reverse_proxy 127.0.0.1:8099
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		-Server
+	}
+}
+
+# 只有 IP、没有域名时用这段（HTTP，无证书）
+# :80 {
+# 	reverse_proxy 127.0.0.1:8099
+# }

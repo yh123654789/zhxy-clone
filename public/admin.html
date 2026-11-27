@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>智慧校园平台 · 管理后台</title>
+<link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+<div class="layout">
+  <aside class="side">
+    <div class="brand"><i></i> 智慧校园</div>
+    <nav id="nav"></nav>
+    <div class="who">
+      <div id="whoName">—</div>
+      <div id="whoOrg" class="dim"></div>
+      <div id="whoRole" style="margin-top:6px"></div>
+      <button class="btn gray small" style="margin-top:10px;width:100%" onclick="logout()">退出登录</button>
+    </div>
+  </aside>
+
+  <main class="main">
+    <div class="head">
+      <h2 id="pageTitle">概览</h2>
+      <div id="pageActions"></div>
+    </div>
+    <div id="view"></div>
+  </main>
+</div>
+
+<script src="/app.js"></script>
+<script>
+const $ = (id) => document.getElementById(id);
+let ME = null;
+
+const PAGES = [
+  { key: 'home', title: '概览', perm: null },
+  { key: 'student', title: '学生管理', perm: 'base_student' },
+  { key: 'teacher', title: '教师管理', perm: 'base_teacher' },
+  { key: 'klass', title: '班级管理', perm: 'base_class' },
+  { key: 'org', title: '机构树', perm: 'base_org' },
+  { key: 'apply', title: '注册审批', perm: 'sys_apply' },
+  { key: 'audit', title: '审计日志', perm: 'sys_audit' },
+  { key: 'swap', title: '一次性 Token', perm: null },
+];
+
+const CAN = (p) => {
+  if (!p) return true;
+  const pages = (ME && ME.permissions.pages) || [];
+  return pages.includes('*') || pages.includes(p);
+};
+const CANBTN = (b) => {
+  const btns = (ME && ME.permissions.btns) || [];
+  return btns.includes('*') || btns.includes(b);
+};
+
+async function boot() {
+  // 演示便利：/admin.html?token=xxx 直接带入会话（生产环境应删掉这段）
+  const q = new URLSearchParams(location.search);
+  if (q.get('token')) { Store.token = q.get('token'); history.replaceState(null, '', '/admin.html' + (location.hash || '')); }
+  if (!Store.token) return location.href = '/';
+  const r = await api('/base/api/auth/user/current/detail', {}, { method: 'GET' });
+  if (r.code !== 0) { Store.token = ''; return location.href = '/'; }
+  ME = r.data;
+  $('whoName').textContent = `${ME.realName}（${ME.userName}）`;
+  $('whoOrg').textContent = `${ME.orgName} · ${ME.tenantId}`;
+  $('whoRole').innerHTML = `<span class="tag ok">${ME.roleName}</span>`;
+  const nav = $('nav');
+  nav.innerHTML = PAGES.filter(p => CAN(p.perm))
+    .map(p => `<a href="#${p.key}" data-k="${p.key}">${p.title}</a>`).join('');
+  nav.onclick = (e) => { const a = e.target.closest('a'); if (a) { location.hash = '#' + a.dataset.k; } };
+  window.addEventListener('hashchange', route);
+  route();
+}
+
+function route() {
+  const key = (location.hash || '#home').slice(1);
+  const page = PAGES.find(p => p.key === key) || PAGES[0];
+  if (!CAN(page.perm)) { toast('暂无该页面权限', 'err'); return location.hash = '#home'; }
+  document.querySelectorAll('#nav a').forEach(a => a.classList.toggle('on', a.dataset.k === page.key));
+  $('pageTitle').textContent = page.title;
+  $('pageActions').innerHTML = '';
+  ({ home: viewHome, student: viewStudent, teacher: viewTeacher, klass: viewKlass,
+     org: viewOrg, apply: viewApply, audit: viewAudit, swap: viewSwap })[page.key]();
+}
+
+/* ---------------- 概览 ---------------- */
+async function viewHome() {
+  const s = await api('/base/api/student/page', { pageIndex: 1, pageSize: 100 });
+  const t = await api('/base/api/teacher/page', { pageIndex: 1, pageSize: 100 });
+  const c = await api('/base/api/class/page', { pageIndex: 1, pageSize: 100 });
+  const a = CAN('sys_apply') ? await api('/base/api/auth/register/apply/page', { pageIndex: 1, pageSize: 100 }) : { data: { total: '-' } };
+  $('view').innerHTML = `
+    <div class="grid2">
+      <div class="stat"><b>${s.data ? s.data.total : '-'}</b><span>学生总数（数据域内）</span></div>
+      <div class="stat"><b>${t.data ? t.data.total : '-'}</b><span>教师总数</span></div>
+      <div class="stat"><b>${c.data ? c.data.total : '-'}</b><span>班级总数</span></div>
+      <div class="stat"><b>${a.data ? a.data.total : '-'}</b><span>待处理注册申请</span></div>
+    </div>
+    <div class="card" style="margin-top:16px">
+      <div style="font-weight:700;margin-bottom:10px">当前权限</div>
+      <div class="dim" style="font-size:13px;line-height:2">
+        页面权限码：<span class="mono">${JSON.stringify(ME.permissions.pages)}</span><br/>
+        按钮权限码：<span class="mono">${JSON.stringify(ME.permissions.btns)}</span><br/>
+        <span style="color:var(--warn)">提示：按钮权限只影响前端是否渲染，服务端每个写接口都会独立校验 —— 直接构造请求也会被拒。</span>
+      </div>
+    </div>`;
+}
+
+/* ---------------- 通用表格 ---------------- */
+function table(cols, rows, actions) {
+  return `<table><thead><tr>${cols.map(c => `<th>${c.title}</th>`).join('')}${actions ? '<th>操作</th>' : ''}</tr></thead>
+    <tbody>${rows.length ? rows.map(r => `<tr>${cols.map(c => `<td>${r[c.key] ?? ''}</td>`).join('')}
+      ${actions ? `<td>${actions(r)}</td>` : ''}</tr>`).join('')
+      : `<tr><td colspan="${cols.length + (actions ? 1 : 0)}" class="dim">暂无数据</td></tr>`}</tbody></table>`;
+}
+
+let pg = { student: 1, teacher: 1, klass: 1 };
+
+async function viewStudent() {
+  $('pageActions').innerHTML = CANBTN('base_student_insert')
+    ? `<button class="btn small" onclick="addStudent()">新增学生</button>` : '';
+  const r = await api('/base/api/student/page', { pageIndex: pg.student, pageSize: 8 });
+  if (r.code !== 0) return $('view').innerHTML = `<div class="card">${r.msg}</div>`;
+  $('view').innerHTML = `<div class="card">${table(
+    [{ key: 'id', title: 'ID' }, { key: 'name', title: '姓名' }, { key: 'studentNo', title: '学号' },
+     { key: 'gender', title: '性别' }, { key: 'orgId', title: '机构' }, { key: 'phone', title: '手机号' }],
+    r.data.list)}${pager(r.data, 'student', viewStudent)}</div>`;
+}
+
+async function addStudent() {
+  const name = prompt('学生姓名'); if (!name) return;
+  const orgId = prompt('机构ID（可填 O104/O105/O106；跨机构会被服务端拒绝）', 'O104'); if (!orgId) return;
+  const r = await api('/base/api/student/save', { name, orgId });
+  toast(r.code === 0 ? '新增成功' : r.msg, r.code === 0 ? 'ok' : 'err');
+  viewStudent();
+}
+
+async function viewTeacher() {
+  const r = await api('/base/api/teacher/page', { pageIndex: pg.teacher, pageSize: 8 });
+  if (r.code !== 0) return $('view').innerHTML = `<div class="card">${r.msg}</div>`;
+  $('view').innerHTML = `<div class="card">${table(
+    [{ key: 'id', title: 'ID' }, { key: 'name', title: '姓名' }, { key: 'subject', title: '学科' },
+     { key: 'orgId', title: '机构' }, { key: 'phone', title: '手机号' }],
+    r.data.list)}${pager(r.data, 'teacher', viewTeacher)}</div>`;
+}
+
+async function viewKlass() {
+  const r = await api('/base/api/class/page', { pageIndex: pg.klass, pageSize: 8 });
+  if (r.code !== 0) return $('view').innerHTML = `<div class="card">${r.msg}</div>`;
+  $('view').innerHTML = `<div class="card">${table(
+    [{ key: 'name', title: '班级' }, { key: 'headTeacher', title: '班主任' },
+     { key: 'count', title: '人数' }, { key: 'orgId', title: '机构' }],
+    r.data.list)}${pager(r.data, 'klass', viewKlass)}</div>`;
+}
+
+function pager(d, key, fn) {
+  const max = Math.max(1, Math.ceil(d.total / d.pageSize));
+  return `<div class="pager">共 ${d.total} 条 · 第 ${d.pageIndex}/${max} 页
+    <button class="btn gray small" onclick="goPage('${key}',-1,${fn.name})">上一页</button>
+    <button class="btn gray small" onclick="goPage('${key}',1,${fn.name})">下一页</button></div>`;
+}
+window.__fns = { viewStudent, viewTeacher, viewKlass };
+function goPage(key, delta, fnName) { pg[key] = Math.max(1, pg[key] + delta); window.__fns[fnName](); }
+
+/* ---------------- 机构树 ---------------- */
+async function viewOrg() {
+  const root = await api('/base/api/organizationUnit/all', {}, { method: 'GET', query: { parentId: '0' } });
+  if (root.code !== 0) return $('view').innerHTML = `<div class="card">${root.msg}</div>`;
+  const rows = [];
+  async function walk(list, depth) {
+    for (const o of list) {
+      rows.push({ ...o, indent: '　'.repeat(depth) + (depth ? '└ ' : '') });
+      const kids = await api('/base/api/organizationUnit/all', {}, { method: 'GET', query: { parentId: o.id } });
+      if (kids.code === 0 && kids.data.length) await walk(kids.data, depth + 1);
+    }
+  }
+  await walk(root.data, 0);
+  $('view').innerHTML = `<div class="card">${table(
+    [{ key: 'indent', title: '机构' }, { key: 'id', title: 'ID' }, { key: 'unitAttr', title: '类型码' },
+     { key: 'level', title: '层级' }, { key: 'path', title: '路径' }],
+    rows.map(r => ({ ...r, indent: r.indent + r.displayName })))}</div>`;
+}
+
+/* ---------------- 注册审批 ---------------- */
+async function viewApply() {
+  const r = await api('/base/api/auth/register/apply/page', { pageIndex: 1, pageSize: 20 });
+  if (r.code !== 0) return $('view').innerHTML = `<div class="card">${r.msg}</div>`;
+  const stateTag = (s) => s === 0 ? '<span class="tag warn">待审核</span>'
+    : s === 1 ? '<span class="tag ok">已通过</span>' : '<span class="tag err">已驳回</span>';
+  $('view').innerHTML = `<div class="card">${table(
+    [{ key: 'id', title: '申请ID' }, { key: 'userName', title: '账号' }, { key: 'realName', title: '姓名' },
+     { key: 'phone', title: '手机号' }, { key: 'orgId', title: '机构' }, { key: 'stateTxt', title: '状态' }],
+    r.data.list.map(a => ({ ...a, stateTxt: stateTag(a.state) })),
+    (row) => row.state === 0
+      ? `<button class="btn small" onclick="doApply('${row.id}',1)">通过</button>
+         <button class="btn small danger" onclick="doApply('${row.id}',0)">驳回</button>`
+      : '<span class="dim">—</span>')}</div>`;
+}
+async function doApply(applyId, pass) {
+  const r = await api('/base/api/auth/register/apply', { applyId, pass: !!pass, remark: pass ? '' : '资料不全' });
+  toast(r.code === 0 ? (pass ? '已通过，账号已创建' : '已驳回') : r.msg, r.code === 0 ? 'ok' : 'err');
+  viewApply();
+}
+
+/* ---------------- 审计日志 ---------------- */
+async function viewAudit() {
+  const r = await api('/base/api/audit/page', {}, { method: 'GET', query: { pageIndex: 1, pageSize: 30 } });
+  if (r.code !== 0) return $('view').innerHTML = `<div class="card">${r.msg}</div>`;
+  const t = (ts) => new Date(ts).toLocaleString('zh-CN');
+  $('view').innerHTML = `<div class="card">${table(
+    [{ key: 'tsTxt', title: '时间' }, { key: 'user_name', title: '操作人' }, { key: 'method', title: '方法' },
+     { key: 'path', title: '路径' }, { key: 'ip', title: 'IP' }, { key: 'detail', title: '详情' }],
+    r.data.list.map(x => ({ ...x, tsTxt: t(x.ts) })))}</div>`;
+}
+
+/* ---------------- 一次性 token 演示 ---------------- */
+async function viewSwap() {
+  $('view').innerHTML = `<div class="card">
+    <div style="font-weight:700">跨系统单点登录（一次性 Token）</div>
+    <div class="dim" style="margin:10px 0 16px;font-size:13px;line-height:1.9">
+      1. 本系统用当前会话换取一次性 token（60 秒有效、用一次即失效）<br/>
+      2. 把 token 拼到目标系统 URL：<span class="mono">?accesstoken=xxx</span>（本实现放在 header 更安全）<br/>
+      3. 目标系统用 token 兑换自己的会话，兑换后立即失效
+    </div>
+    <button class="btn small" onclick="makeOnce()">生成一次性 Token</button>
+    <button class="btn gray small" onclick="useOnce()">模拟目标系统兑换</button>
+    <div id="swapOut" class="mono" style="margin-top:14px;color:var(--dim)"></div></div>`;
+}
+let lastOnce = '';
+async function makeOnce() {
+  const r = await api('/base/api/auth/swap/once/token', {});
+  if (r.code !== 0) return toast(r.msg, 'err');
+  lastOnce = r.data.accessToken;
+  $('swapOut').innerHTML = `已生成：<span style="color:var(--ok)">${lastOnce}</span><br/>60 秒内有效，只能用一次。`;
+}
+async function useOnce() {
+  if (!lastOnce) return toast('先生成 token', 'err');
+  const r = await api('/base/api/auth/swap/token/byonce', {}, { method: 'GET', query: { oncetoken: lastOnce } });
+  $('swapOut').innerHTML += `<br/>第一次兑换：${r.code === 0 ? '成功（已签发新会话）' : r.msg}`;
+  const r2 = await api('/base/api/auth/swap/token/byonce', {}, { method: 'GET', query: { oncetoken: lastOnce } });
+  $('swapOut').innerHTML += `<br/>第二次兑换：<span style="color:var(--danger)">${r2.code === 0 ? '竟然还成功？' : r2.msg + '（符合预期：一次性）'}</span>`;
+}
+
+function logout() {
+  api('/base/api/auth/logout', {}).finally(() => { Store.token = ''; location.href = '/'; });
+}
+
+boot();
+</script>
+</body>
+</html>

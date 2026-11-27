@@ -1,0 +1,18 @@
+# Render 免费层部署（最快，5 分钟上线；免费实例 15 分钟无访问会休眠，首次访问约 30 秒冷启动）
+# 用法：把项目推到 GitHub → Render 控制台 New > Blueprint → 选这个仓库
+services:
+  - type: web
+    name: zhxy-clone-demo
+    runtime: node
+    plan: free
+    region: singapore
+    buildCommand: npm install --omit=dev
+    startCommand: node server.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: SHOW_DEV_CODE
+        value: "1"
+      - key: ACCESS_CODE
+        sync: false          # 在控制台里填，留空则无口令
+    healthCheckPath: /base/api/tenant/query?uniqueName=demo
