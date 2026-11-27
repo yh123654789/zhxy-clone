@@ -1,3 +1,2 @@
-2026/11/27-08:28:30.576 7c4c Reusing MANIFEST D:\Projects\zhxy-clone\.shot-profile\Default\Local Storage\leveldb/MANIFEST-000001
-2026/11/27-08:28:30.577 7c4c Recovering log #3
-2026/11/27-08:28:30.578 7c4c Reusing old log D:\Projects\zhxy-clone\.shot-profile\Default\Local Storage\leveldb/000003.log 
+2026/11/27-08:29:12.751 9ee4 Creating DB D:\Projects\zhxy-clone\.shot-profile\Default\Local Storage\leveldb since it was missing.
+2026/11/27-08:29:12.757 9ee4 Reusing MANIFEST D:\Projects\zhxy-clone\.shot-profile\Default\Local Storage\leveldb/MANIFEST-000001

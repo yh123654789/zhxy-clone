@@ -1,3 +1,2 @@
-2026/11/27-08:28:30.535 310c Reusing MANIFEST D:\Projects\zhxy-clone\.shot-profile\Default\Sync Data\LevelDB/MANIFEST-000001
-2026/11/27-08:28:30.536 310c Recovering log #3
-2026/11/27-08:28:30.536 310c Reusing old log D:\Projects\zhxy-clone\.shot-profile\Default\Sync Data\LevelDB/000003.log 
+2026/11/27-08:29:12.712 1a5c Creating DB D:\Projects\zhxy-clone\.shot-profile\Default\Sync Data\LevelDB since it was missing.
+2026/11/27-08:29:12.718 1a5c Reusing MANIFEST D:\Projects\zhxy-clone\.shot-profile\Default\Sync Data\LevelDB/MANIFEST-000001

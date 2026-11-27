@@ -95,9 +95,9 @@ function seed() {
   if (get('SELECT id FROM tenants LIMIT 1')) return;
 
   const tenants = [
-    { id: 'T1001', name: '示范实验学校', unique: 'demo', mt: 0, reg: 1, appr: 1, title: '智慧校园平台' },
+    { id: 'T1001', name: '示范实验学校', unique: 'demo', mt: 0, reg: 1, appr: 1, title: 'AI 校园管理系统' },
     { id: 'T1002', name: '区域教育局版', unique: 'district', mt: 1, reg: 1, appr: 1, title: '区域教育管理平台' },
-    { id: 'T1003', name: '关闭注册的学校', unique: 'closed', mt: 0, reg: 0, appr: 1, title: '智慧校园平台' },
+    { id: 'T1003', name: '关闭注册的学校', unique: 'closed', mt: 0, reg: 0, appr: 1, title: 'AI 校园管理系统' },
   ];
   tenants.forEach(t => run('INSERT INTO tenants VALUES(?,?,?,?,?,?,?)', t.id, t.name, t.unique, t.mt, t.reg, t.appr, t.title));
 
