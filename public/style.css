@@ -127,3 +127,23 @@ tr:hover td { background: rgba(255,255,255,.02); }
 .msg.user .bubble { background: #173a3a; border-color: #25615a; }
 .chat-input { display: flex; gap: 8px; padding-top: 12px; border-top: 1px solid var(--line); }
 .chat-input input { flex: 1; }
+
+
+/* ---------- 布局修正：防止内容横向溢出 ---------- */
+.layout { grid-template-columns: 224px minmax(0, 1fr); }
+.main { min-width: 0; overflow-x: hidden; }
+#view { min-width: 0; }
+#view .card, #homeCharts .card { min-width: 0; }
+.mono { word-break: break-all; line-height: 1.8; }
+table { table-layout: auto; }
+.grid2 { grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); }
+
+/* 图表两卡等高 */
+#homeCharts > div:first-child { align-items: stretch; }
+
+/* 登录页左栏底部装饰 */
+.brand-stat { margin-top: 26px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.brand-stat div { background: rgba(10,26,40,.55); border: 1px solid rgba(60,110,120,.35);
+  border-radius: 10px; padding: 10px 12px; }
+.brand-stat b { display: block; font-size: 19px; color: #4fd1c5; }
+.brand-stat span { font-size: 11.5px; color: #7d97ad; }

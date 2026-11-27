@@ -18,6 +18,12 @@
         <div>注册审批流：提交 → 待审 → 管理员批准才建号</div>
         <div>RBAC 页面码 + 按钮码，服务端接口级校验</div>
         <div>机构树按数据域过滤，跨机构读写直接拒绝</div>
+        <div class="brand-stat">
+          <div><b>240</b><span>在册学生</span></div>
+          <div><b>720</b><span>成绩记录</span></div>
+          <div><b>35</b><span>自动化测试</span></div>
+          <div><b>3 层</b><span>AI 回退架构</span></div>
+        </div>
       </div>
     </div>
 
@@ -28,6 +34,11 @@
         <button id="tab-qr">扫码登录</button>
       </div>
 
+      <button class="btn" id="btnDemo" style="width:100%;margin-bottom:14px;
+        background:linear-gradient(180deg,#4fd1c5,#2f9e8f);font-size:15px;padding:12px">
+        ⚡ 一键体验（评审专用 · 免输入账号）
+      </button>
+      <div class="dim" style="text-align:center;font-size:12px;margin-bottom:10px">— 或使用账号密码登录 —</div>
       <label>租户</label>
       <select id="tenantSel"></select>
 
@@ -147,6 +158,33 @@ async function loadRegOrgs() {
   const key = $('tenantSel').value;
   sel.innerHTML = (roots[key] || []).map(o => `<option value="${o[0]}">${o[1]}</option>`).join('');
 }
+
+/* ---------------- 一键体验 ---------------- */
+$('btnDemo').onclick = async () => {
+  const btn = $('btnDemo');
+  btn.disabled = true; btn.textContent = '正在进入演示账号…';
+  try {
+    $('tenantSel').value = 'demo';
+    await onTenantChange();
+    $('userName').value = 'admin';
+    $('password').value = 'Admin@2026';
+    const r = await api('/base/api/auth/loginByUserPwdNoOrg', {
+      tenantId: Store.tenant, userName: 'admin', password: 'Admin@2026',
+      checkCode: '', checkCodeSessionId: '',
+    });
+    if (r.code === 0 && r.data.operationType === 5) {
+      Store.token = r.data.userToken.accessToken;
+      toast('已进入演示账号（学校管理员）', 'ok');
+      setTimeout(() => location.href = '/admin.html', 300);
+      return;
+    }
+    btn.disabled = false; btn.textContent = '⚡ 一键体验（评审专用 · 免输入账号）';
+    $('pwdErr').textContent = r.msg || '演示账号暂时不可用，请手动登录';
+  } catch (e) {
+    btn.disabled = false; btn.textContent = '⚡ 一键体验（评审专用 · 免输入账号）';
+    $('pwdErr').textContent = '网络异常，请手动登录';
+  }
+};
 
 /* ---------------- 账号密码登录 ---------------- */
 $('btnPwd').onclick = async () => {
